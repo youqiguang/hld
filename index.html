@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚦 小班红绿灯游戏</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  background: linear-gradient(180deg, #5bb8f5 0%, #a8d8f0 50%, #6ec46e 50%, #4aaa4a 100%);
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 太阳 */
+.sun {
+  position: fixed; top: 4vh; right: 6vw;
+  width: 100px; height: 100px;
+  background: radial-gradient(circle, #ffe566, #ffcc00);
+  border-radius: 50%;
+  box-shadow: 0 0 0 20px rgba(255,220,0,.18), 0 0 0 40px rgba(255,220,0,.09);
+  animation: sunPulse 3s ease-in-out infinite;
+}
+@keyframes sunPulse {
+  0%,100% { box-shadow: 0 0 0 20px rgba(255,220,0,.18), 0 0 0 40px rgba(255,220,0,.09); }
+  50%      { box-shadow: 0 0 0 30px rgba(255,220,0,.22), 0 0 0 55px rgba(255,220,0,.12); }
+}
+
+/* 云朵 */
+.cloud { position:fixed; background:#fff; border-radius:60px; opacity:.88; animation:floatCloud linear infinite; }
+.cloud::before,.cloud::after { content:''; position:absolute; background:#fff; border-radius:50%; }
+.c1 { width:180px; height:55px; top:7vh;  animation-duration:28s; animation-delay:0s; }
+.c1::before { width:88px; height:88px; top:-46px; left:20px; }
+.c1::after  { width:70px; height:70px; top:-36px; left:80px; }
+.c2 { width:130px; height:40px; top:16vh; animation-duration:38s; animation-delay:-12s; }
+.c2::before { width:65px; height:65px; top:-34px; left:14px; }
+.c2::after  { width:50px; height:50px; top:-24px; left:58px; }
+.c3 { width:160px; height:48px; top:3vh;  animation-duration:32s; animation-delay:-7s; }
+.c3::before { width:78px; height:78px; top:-42px; left:18px; }
+.c3::after  { width:60px; height:60px; top:-30px; left:72px; }
+@keyframes floatCloud { from { left:-250px; } to { left:110vw; } }
+
+/* 马路 */
+.road {
+  position:fixed; bottom:0; left:0; right:0; height:110px;
+  background: linear-gradient(180deg, #5a5a5a 0%, #444 50%, #5a5a5a 100%);
+  overflow:hidden;
+}
+.road-dash {
+  position:absolute; bottom:48px; left:0; right:0; height:10px;
+  background: repeating-linear-gradient(90deg,#ffd43b 0,#ffd43b 56px,transparent 56px,transparent 110px);
+  animation: roadScroll 1.2s linear infinite;
+}
+.road-dash.stopped { animation-play-state:paused; }
+@keyframes roadScroll { from{background-position:0} to{background-position:110px} }
+
+.car {
+  position:absolute; bottom:22px; font-size:54px; line-height:1;
+  animation: carDrive linear infinite;
+  filter: drop-shadow(3px 3px 5px rgba(0,0,0,.3));
+}
+.car.stopped { animation-play-state:paused; }
+.car:nth-child(2) { animation-duration:7s;  animation-delay:0s;    font-size:50px; bottom:28px; }
+.car:nth-child(3) { animation-duration:9s;  animation-delay:-3.5s; font-size:46px; }
+.car:nth-child(4) { animation-duration:11s; animation-delay:-6s;   font-size:52px; bottom:25px; }
+@keyframes carDrive { from{left:-100px} to{left:110%} }
+
+/* 主布局 */
+.main {
+  position:relative; z-index:10;
+  display:grid;
+  grid-template-columns: auto 1fr auto;
+  align-items:center;
+  gap:4vw;
+  padding:0 3vw;
+  width:100%; max-width:1400px;
+}
+
+/* ====== 红绿灯 ====== */
+.pole-wrap { display:flex; flex-direction:column; align-items:center; }
+
+.traffic-light {
+  background: linear-gradient(160deg,#2c2c2c,#1a1a1a);
+  border-radius:44px; padding:32px 28px;
+  display:flex; flex-direction:column; gap:28px;
+  border:8px solid #111;
+  box-shadow:10px 10px 0 #000, inset 0 0 30px rgba(0,0,0,.5);
+  position:relative;
+}
+.traffic-light::after {
+  content:''; position:absolute;
+  top:14px; left:14px; right:14px; bottom:14px;
+  border-radius:32px; border:3px solid rgba(255,255,255,.06); pointer-events:none;
+}
+
+/* 灯泡底座（凹槽感） */
+.bulb-housing {
+  width:130px; height:130px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%, #3a3a3a, #111);
+  box-shadow: inset 0 8px 24px rgba(0,0,0,.9), inset 0 -4px 10px rgba(255,255,255,.04), 0 0 0 6px #0a0a0a;
+  display:flex; align-items:center; justify-content:center;
+  position:relative; overflow:hidden;
+}
+
+/* 实心灯 - 默认暗淡 */
+.bulb-circle {
+  width:100px; height:100px; border-radius:50%;
+  transition: background .35s, box-shadow .35s, transform .35s;
+  position:relative;
+}
+
+/* 高光反射 */
+.bulb-circle::after {
+  content:'';
+  position:absolute;
+  top:12%; left:15%;
+  width:30%; height:28%;
+  background:rgba(255,255,255,.25);
+  border-radius:50%;
+  transform:rotate(-30deg);
+}
+
+/* 暗红 */
+.bulb-circle.red-dim {
+  background: radial-gradient(circle at 40% 35%, #6b1010, #300505);
+  box-shadow: inset 0 4px 12px rgba(0,0,0,.6);
+}
+/* 暗绿 */
+.bulb-circle.green-dim {
+  background: radial-gradient(circle at 40% 35%, #0d4020, #041a0d);
+  box-shadow: inset 0 4px 12px rgba(0,0,0,.6);
+}
+
+/* 亮红 */
+.bulb-circle.red-on {
+  background: radial-gradient(circle at 40% 35%, #ff8888, #FF2020, #cc0000);
+  box-shadow:
+    inset 0 4px 12px rgba(255,100,100,.3),
+    0 0 0 4px rgba(255,50,50,.4),
+    0 0 30px 12px rgba(255,30,30,.8),
+    0 0 70px 30px rgba(255,0,0,.5),
+    0 0 120px 60px rgba(200,0,0,.25);
+  animation: redGlow 1s ease-in-out infinite;
+  transform: scale(1.06);
+}
+@keyframes redGlow {
+  0%,100% { box-shadow: inset 0 4px 12px rgba(255,100,100,.3), 0 0 0 4px rgba(255,50,50,.4), 0 0 30px 12px rgba(255,30,30,.8), 0 0 70px 30px rgba(255,0,0,.5), 0 0 120px 60px rgba(200,0,0,.25); }
+  50%      { box-shadow: inset 0 4px 12px rgba(255,100,100,.3), 0 0 0 6px rgba(255,50,50,.5), 0 0 45px 18px rgba(255,30,30,.9), 0 0 90px 45px rgba(255,0,0,.6), 0 0 150px 80px rgba(200,0,0,.3); }
+}
+
+/* 亮绿 */
+.bulb-circle.green-on {
+  background: radial-gradient(circle at 40% 35%, #aaffaa, #00EE44, #00aa22);
+  box-shadow:
+    inset 0 4px 12px rgba(100,255,100,.3),
+    0 0 0 4px rgba(0,220,60,.4),
+    0 0 30px 12px rgba(0,220,60,.8),
+    0 0 70px 30px rgba(0,200,50,.5),
+    0 0 120px 60px rgba(0,150,30,.25);
+  animation: greenGlow 1.5s ease-in-out infinite;
+  transform: scale(1.06);
+}
+@keyframes greenGlow {
+  0%,100% { box-shadow: inset 0 4px 12px rgba(100,255,100,.3), 0 0 0 4px rgba(0,220,60,.4), 0 0 30px 12px rgba(0,220,60,.8), 0 0 70px 30px rgba(0,200,50,.5), 0 0 120px 60px rgba(0,150,30,.25); }
+  50%      { box-shadow: inset 0 4px 12px rgba(100,255,100,.3), 0 0 0 6px rgba(0,220,60,.55), 0 0 45px 18px rgba(0,240,70,.9), 0 0 90px 45px rgba(0,210,60,.6), 0 0 150px 80px rgba(0,170,40,.3); }
+}
+
+.pole { width:22px; height:80px; background:linear-gradient(90deg,#777,#ccc,#777); border-radius:6px; margin-top:-4px; }
+.pole-base { width:70px; height:24px; background:linear-gradient(180deg,#888,#555); border-radius:10px; }
+
+/* 中间面板 */
+.center-panel { display:flex; flex-direction:column; align-items:center; gap:20px; text-align:center; }
+
+.big-status {
+  font-size:clamp(48px,6.5vw,92px); font-weight:900; color:white;
+  text-shadow:4px 4px 0 rgba(0,0,0,.4); letter-spacing:6px; line-height:1.1;
+  transition:color .3s; min-height:1.2em;
+}
+.big-status.red-col   { color:#ff6b6b; text-shadow:4px 4px 0 rgba(180,0,0,.5); }
+.big-status.green-col { color:#78f578; text-shadow:4px 4px 0 rgba(0,120,0,.5); }
+
+/* 圆环倒计时 */
+.ring-wrap { position:relative; width:190px; height:190px; }
+.ring-wrap svg { transform:rotate(-90deg); }
+.ring-bg { fill:none; stroke:rgba(255,255,255,.15); stroke-width:14; }
+.ring-fg { fill:none; stroke-width:14; stroke-linecap:round; transition:stroke-dashoffset 1s linear, stroke .4s; }
+.ring-num {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:68px; font-weight:900; color:white; text-shadow:2px 2px 6px rgba(0,0,0,.5);
+}
+
+/* 轮次点 */
+.rounds-bar { display:flex; gap:12px; }
+.round-dot {
+  width:22px; height:22px; border-radius:50%;
+  background:rgba(255,255,255,.3); border:3px solid rgba(255,255,255,.6);
+  transition:background .3s;
+}
+.round-dot.done   { background:#ffd43b; border-color:#ffbb00; }
+.round-dot.active { background:white;   border-color:white; box-shadow:0 0 10px white; }
+
+/* 速度 */
+.speed-row {
+  display:flex; align-items:center; gap:14px;
+  background:rgba(0,0,0,.45); border-radius:50px; padding:10px 22px;
+  backdrop-filter:blur(4px);
+}
+.speed-lbl { color:rgba(255,255,255,.85); font-size:18px; font-weight:700; }
+.spd-btn {
+  background:rgba(255,255,255,.2); border:2px solid rgba(255,255,255,.45);
+  color:white; font-size:20px; font-weight:900;
+  width:40px; height:40px; border-radius:50%; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s;
+}
+.spd-btn:hover { background:rgba(255,255,255,.35); }
+.spd-val { color:white; font-size:20px; font-weight:800; min-width:50px; text-align:center; }
+
+/* 右侧面板 */
+.right-panel { display:flex; flex-direction:column; align-items:center; gap:20px; }
+
+/* 小猫 */
+.cat-zone { position:relative; }
+.cat-emoji {
+  font-size:110px; line-height:1; display:block; text-align:center;
+  filter:drop-shadow(4px 6px 8px rgba(0,0,0,.35));
+  animation:catBob 2.2s ease-in-out infinite; cursor:default;
+}
+@keyframes catBob { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-12px) rotate(4deg)} }
+
+/* 气泡 */
+.speech-bubble {
+  position:absolute; bottom:108%; left:50%; transform:translateX(-50%) scale(.85) translateY(10px);
+  background:white; border-radius:22px; padding:14px 18px;
+  font-size:17px; font-weight:800; color:#333;
+  width:240px; line-height:1.5;
+  border:3px solid #ffcc00; box-shadow:4px 4px 0 rgba(0,0,0,.15);
+  opacity:0;
+  transition:opacity .25s, transform .25s;
+  pointer-events:none; text-align:center;
+}
+.speech-bubble::after {
+  content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+  border:12px solid transparent; border-top-color:white;
+}
+.speech-bubble::before {
+  content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+  border:15px solid transparent; border-top-color:#ffcc00;
+  margin-top:3px;
+}
+.speech-bubble.show { opacity:1; transform:translateX(-50%) scale(1) translateY(0); }
+
+/* ====== 字幕条 ====== */
+.subtitle-bar {
+  position:fixed;
+  bottom:120px; left:50%; transform:translateX(-50%);
+  z-index:50;
+  background:rgba(0,0,0,.82);
+  border-radius:18px;
+  padding:16px 36px;
+  max-width:85vw;
+  text-align:center;
+  border:3px solid rgba(255,255,255,.2);
+  backdrop-filter:blur(6px);
+  box-shadow:0 4px 30px rgba(0,0,0,.5);
+  opacity:0;
+  transition:opacity .3s ease;
+  pointer-events:none;
+}
+.subtitle-bar.show { opacity:1; }
+.subtitle-text {
+  font-size:clamp(20px,2.8vw,32px);
+  font-weight:900;
+  color:white;
+  letter-spacing:2px;
+  line-height:1.5;
+  text-shadow:2px 2px 6px rgba(0,0,0,.6);
+}
+.subtitle-text.red-sub  { color:#ff7b7b; }
+.subtitle-text.green-sub { color:#78f578; }
+.subtitle-text.blue-sub  { color:#74c0fc; }
+
+/* 按钮 */
+.btn-group { display:flex; flex-direction:column; gap:14px; width:210px; }
+.btn {
+  font-family:'Microsoft YaHei','PingFang SC',sans-serif;
+  font-weight:900; font-size:21px; padding:16px 0; border-radius:60px;
+  border:none; cursor:pointer; letter-spacing:2px; width:100%;
+  box-shadow:0 8px 0 rgba(0,0,0,.35); transition:transform .12s, box-shadow .12s;
+  position:relative; overflow:hidden;
+}
+.btn:active { transform:translateY(6px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
+.btn::after {
+  content:''; position:absolute; top:0; left:-60%; width:40%; height:100%;
+  background:rgba(255,255,255,.2); transform:skewX(-20deg);
+  animation:shimmer 2.5s infinite;
+}
+@keyframes shimmer { 0%,100%{left:-60%} 50%{left:130%} }
+.btn-start   { background:linear-gradient(180deg,#6ae97a,#2b9e40); color:white; text-shadow:2px 2px 3px rgba(0,0,0,.3); }
+.btn-station { background:linear-gradient(180deg,#74c0fc,#1864ab); color:white; text-shadow:2px 2px 3px rgba(0,0,0,.3); }
+.btn-stop    { background:linear-gradient(180deg,#ffa94d,#d9480f); color:white; text-shadow:2px 2px 3px rgba(0,0,0,.3); font-size:18px; }
+
+/* 进站全屏 */
+.station-screen {
+  position:fixed; inset:0; z-index:100;
+  background:linear-gradient(135deg,#0d2b5e 0%,#1a4a8a 50%,#0d2b5e 100%);
+  display:none; flex-direction:column; align-items:center; justify-content:center; gap:24px;
+}
+.station-screen.show { display:flex; animation:fadeInBig .5s ease; }
+@keyframes fadeInBig { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+
+.stars-bg { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.star { position:absolute; animation:twinkle 2s ease-in-out infinite; }
+@keyframes twinkle { 0%,100%{opacity:.2;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+
+.station-train { font-size:130px; animation:trainWiggle 1s ease-in-out infinite; }
+@keyframes trainWiggle { 0%,100%{transform:scale(1) rotate(-3deg)} 50%{transform:scale(1.08) rotate(3deg)} }
+
+.station-title {
+  font-size:clamp(44px,6vw,80px); font-weight:900; color:#74c0fc; letter-spacing:6px;
+  text-shadow:0 0 40px rgba(116,192,252,.7), 0 0 80px rgba(116,192,252,.3);
+  animation:titleGlow 2s ease-in-out infinite;
+}
+@keyframes titleGlow {
+  0%,100%{text-shadow:0 0 40px rgba(116,192,252,.7)}
+  50%{text-shadow:0 0 70px rgba(116,192,252,1),0 0 120px rgba(116,192,252,.5)}
+}
+.station-sub {
+  font-size:clamp(20px,2.5vw,32px); color:rgba(255,255,255,.9);
+  font-weight:700; letter-spacing:3px; text-align:center; line-height:1.7;
+}
+.station-stars { font-size:44px; letter-spacing:10px; animation:starBounce .8s ease-in-out infinite; }
+@keyframes starBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+
+.btn-replay {
+  font-family:'Microsoft YaHei','PingFang SC',sans-serif;
+  font-weight:900; font-size:26px; letter-spacing:3px;
+  padding:18px 55px; border-radius:60px; border:none; cursor:pointer;
+  background:linear-gradient(180deg,#74c0fc,#1864ab); color:white;
+  text-shadow:2px 2px 4px rgba(0,0,0,.3);
+  box-shadow:0 10px 0 rgba(0,0,0,.4),0 0 40px rgba(116,192,252,.4);
+  transition:transform .12s, box-shadow .12s; margin-top:8px;
+}
+.btn-replay:active { transform:translateY(7px); box-shadow:0 3px 0 rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+
+<div class="sun"></div>
+<div class="cloud c1" style="left:-250px"></div>
+<div class="cloud c2" style="left:-200px"></div>
+<div class="cloud c3" style="left:-220px"></div>
+
+<div class="road">
+  <div class="road-dash" id="roadDash"></div>
+  <span class="car" id="car1">🚗</span>
+  <span class="car" id="car2">🚂</span>
+  <span class="car" id="car3">🚙</span>
+</div>
+
+<!-- 字幕条 -->
+<div class="subtitle-bar" id="subtitleBar">
+  <div class="subtitle-text" id="subtitleText"></div>
+</div>
+
+<div class="main">
+
+  <!-- 左：红绿灯 -->
+  <div class="pole-wrap">
+    <div class="traffic-light">
+      <div class="bulb-housing">
+        <div class="bulb-circle red-dim" id="bulbRed"></div>
+      </div>
+      <div class="bulb-housing">
+        <div class="bulb-circle green-dim" id="bulbGreen"></div>
+      </div>
+    </div>
+    <div class="pole"></div>
+    <div class="pole-base"></div>
+  </div>
+
+  <!-- 中：状态 + 计时 -->
+  <div class="center-panel">
+    <div class="big-status" id="bigStatus">准备出发 🚦</div>
+    <div class="ring-wrap">
+      <svg width="190" height="190" viewBox="0 0 190 190">
+        <circle class="ring-bg"  cx="95" cy="95" r="78"/>
+        <circle class="ring-fg" id="ringFg" cx="95" cy="95" r="78"
+          stroke="#78f578" stroke-dasharray="490" stroke-dashoffset="0"/>
+      </svg>
+      <div class="ring-num" id="ringNum">–</div>
+    </div>
+    <div class="rounds-bar" id="roundsBar"></div>
+    <div class="speed-row">
+      <span class="speed-lbl">⏱ 每灯时长：</span>
+      <button class="spd-btn" onclick="changeSpeed(-1)">－</button>
+      <span class="spd-val" id="spdVal">5秒</span>
+      <button class="spd-btn" onclick="changeSpeed(1)">＋</button>
+    </div>
+  </div>
+
+  <!-- 右：小猫 + 按钮 -->
+  <div class="right-panel">
+    <div class="cat-zone">
+      <div class="speech-bubble" id="bubble"><span id="bubbleTxt"></span></div>
+      <span class="cat-emoji">🐱</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-start"   onclick="startGame()">▶ 开始游戏</button>
+      <button class="btn btn-station" onclick="triggerStation()">🚉 进站休息</button>
+      <button class="btn btn-stop"    onclick="stopGame()">⏸ 暂停</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- 进站全屏 -->
+<div class="station-screen" id="stationScreen">
+  <div class="stars-bg" id="starsBg"></div>
+  <div class="station-train">🚂</div>
+  <div class="station-title">🚉 进站啦！</div>
+  <div class="station-sub">游戏结束！<br>把小汽车和小火车开回自己的座位<br>坐好休息吧 🌟</div>
+  <div class="station-stars">⭐⭐⭐⭐⭐</div>
+  <button class="btn-replay" onclick="resetGame()">🔄 再玩一次</button>
+</div>
+
+<script>
+// ── 配置 ──────────────────────────────────────────
+const TOTAL_ROUNDS = 6;
+let baseDur = 5;
+let gameRunning = false;
+let currentPhase = null;
+let countdown = 0;
+let roundCount = 0;
+let ticker = null;
+let audioCtx = null;
+let preferredVoice = null;
+let subtitleTimer = null;
+
+// ── 音效 ─────────────────────────────────────────
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function tone(freq, dur, type='sine', vol=0.45) {
+  try {
+    const c=getCtx(), o=c.createOscillator(), g=c.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+dur);
+  } catch(e){}
+}
+function chime(n) { n.forEach(([f,t,d])=>setTimeout(()=>tone(f,d),t)); }
+
+const SFX = {
+  red:     ()=>chime([[200,0,.5],[180,600,.5]]),
+  green:   ()=>chime([[523,0,.18],[659,160,.18],[784,320,.35]]),
+  tick:    ()=>tone(900,.06,'square',.1),
+  station: ()=>chime([[523,0,.18],[659,150,.18],[784,300,.18],[1047,450,.5],[784,700,.15],[1047,860,.45]]),
+  start:   ()=>chime([[440,0,.15],[523,150,.15],[659,300,.3]]),
+};
+
+// ── 语音 ─────────────────────────────────────────
+function loadVoice() {
+  const vs = window.speechSynthesis.getVoices();
+  if (!vs.length) return;
+  preferredVoice =
+    vs.find(v=>v.lang==='zh-CN' && /female|woman/i.test(v.name)) ||
+    vs.find(v=>v.lang==='zh-CN') ||
+    vs.find(v=>v.lang.startsWith('zh')) || vs[0];
+}
+window.speechSynthesis.onvoiceschanged = loadVoice;
+loadVoice();
+
+const LINES = {
+  start:   '好！游戏开始啦！小汽车和小火车们，准备出发！',
+  red:     '红灯啦！小汽车和小火车，快停下来！不能动哦！',
+  green:   '绿灯啦！小汽车和小火车，可以出发了！快快开起来吧！',
+  station: '游戏结束！我们现在进站啦！把小汽车和小火车开到自己的座位上，坐好休息吧！',
+  pause:   '游戏暂停了，先停下来等一等哦！',
+};
+
+// 字幕内容（比语音短一点，适合显示）
+const SUBTITLES = {
+  start:   { text:'🚦 好！游戏开始啦！小汽车和小火车们，准备出发！', cls:'', dur:4000 },
+  red:     { text:'🛑 红灯啦，小汽车和小火车停下……不能动哦！', cls:'red-sub', dur:5000 },
+  green:   { text:'💚 绿灯啦！小汽车和小火车出发！快快开起来！', cls:'green-sub', dur:5000 },
+  station: { text:'🚉 进站啦！把小汽车开回座位，坐好休息吧！', cls:'blue-sub', dur:6000 },
+  pause:   { text:'⏸ 游戏暂停啦，先停下来等一等哦！', cls:'', dur:3500 },
+};
+
+function speak(key, delay=0) {
+  if (!window.speechSynthesis) return;
+  const txt = LINES[key]; if (!txt) return;
+  setTimeout(()=>{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang='zh-CN'; u.rate=0.88; u.pitch=1.35; u.volume=1;
+    if (preferredVoice) u.voice=preferredVoice;
+    window.speechSynthesis.speak(u);
+  }, delay);
+}
+
+// ── 字幕 ─────────────────────────────────────────
+function showSubtitle(key) {
+  const bar = document.getElementById('subtitleBar');
+  const txt = document.getElementById('subtitleText');
+  const info = SUBTITLES[key];
+  if (!info) return;
+
+  // 清除旧的
+  clearTimeout(subtitleTimer);
+  txt.className = 'subtitle-text ' + (info.cls||'');
+  txt.textContent = info.text;
+  bar.classList.add('show');
+
+  subtitleTimer = setTimeout(()=>{
+    bar.classList.remove('show');
+  }, info.dur);
+}
+
+// ── 气泡 ─────────────────────────────────────────
+const SHORT = {
+  start:'准备出发！', red:'红灯！停下来～',
+  green:'绿灯！快开吧！', station:'进站啦！回座位！', pause:'先停下来！',
+};
+function showBubble(key) {
+  const el=document.getElementById('bubble');
+  document.getElementById('bubbleTxt').textContent = SHORT[key]||'';
+  el.classList.add('show');
+  clearTimeout(el._t);
+el._t = setTimeout(()=>el.classList.remove('show'), 3800);
+}
+
+// ── 马路 ─────────────────────────────────────────
+function setRoad(moving) {
+  document.getElementById('roadDash').className = moving ? 'road-dash' : 'road-dash stopped';
+  ['car1','car2','car3'].forEach(id=>{
+    document.getElementById(id).className = moving ? 'car' : 'car stopped';
+  });
+}
+
+// ── 圆环 ─────────────────────────────────────────
+const CIRC = 490;
+function setRing(secs, total, color) {
+  const fg = document.getElementById('ringFg');
+  document.getElementById('ringNum').textContent = secs > 0 ? secs : '–';
+  fg.setAttribute('stroke', color);
+  fg.style.strokeDashoffset = secs > 0 ? CIRC*(1-secs/total) : 0;
+}
+
+// ── 轮次点 ───────────────────────────────────────
+function buildDots() {
+  const bar = document.getElementById('roundsBar');
+  bar.innerHTML = '';
+  for (let i=0; i<TOTAL_ROUNDS; i++) {
+    const d = document.createElement('div');
+    d.className = 'round-dot' + (i<roundCount?' done': i===roundCount?' active':'');
+    bar.appendChild(d);
+  }
+}
+
+// ── 切换灯 ───────────────────────────────────────
+function startPhase(phase) {
+  currentPhase = phase;
+  const dur = baseDur;
+  countdown = dur;
+
+  // 灯光切换 - 实心圆
+  const red   = document.getElementById('bulbRed');
+  const green = document.getElementById('bulbGreen');
+  if (phase === 'red') {
+    red.className   = 'bulb-circle red-on';
+    green.className = 'bulb-circle green-dim';
+  } else {
+    red.className   = 'bulb-circle red-dim';
+    green.className = 'bulb-circle green-on';
+  }
+
+  const st = document.getElementById('bigStatus');
+  if (phase==='red') {
+    st.textContent='🛑 红灯停！'; st.className='big-status red-col';
+    setRing(countdown,dur,'#ff6b6b');
+    setRoad(false);
+    SFX.red();
+    speak('red', 400);
+    showBubble('red');
+    showSubtitle('red');
+  } else {
+    st.textContent='🟢 绿灯行！'; st.className='big-status green-col';
+    setRing(countdown,dur,'#78f578');
+    setRoad(true);
+    SFX.green();
+    speak('green', 400);
+    showBubble('green');
+    showSubtitle('green');
+  }
+
+  clearInterval(ticker);
+  ticker = setInterval(()=>{
+    countdown--;
+    if (countdown<=3 && countdown>0) SFX.tick();
+    setRing(countdown, dur, phase==='red'?'#ff6b6b':'#78f578');
+    if (countdown<=0) {
+      clearInterval(ticker);
+      roundCount++;
+      buildDots();
+      if (roundCount>=TOTAL_ROUNDS) {
+        triggerStation();
+      } else if (gameRunning) {
+        startPhase(currentPhase==='red' ? 'green' : 'red');
+      }
+    }
+  }, 1000);
+}
+
+// ── 按钮 ─────────────────────────────────────────
+function startGame() {
+  if (gameRunning) return;
+  gameRunning = true;
+  roundCount = 0;
+  buildDots();
+  SFX.start();
+  speak('start');
+  showBubble('start');
+  showSubtitle('start');
+  const st=document.getElementById('bigStatus');
+  st.textContent='🚦 出发咯！'; st.className='big-status';
+  setTimeout(()=>{ if(gameRunning) startPhase('red'); }, 2200);
+}
+
+function stopGame() {
+  gameRunning = false;
+  clearInterval(ticker);
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  setRoad(false);
+  document.getElementById('bulbRed').className='bulb-circle red-dim';
+  document.getElementById('bulbGreen').className='bulb-circle green-dim';
+  const st=document.getElementById('bigStatus');
+  st.textContent='⏸ 游戏暂停'; st.className='big-status';
+  setRing(0,baseDur,'#aaa');
+  speak('pause');
+  showBubble('pause');
+  showSubtitle('pause');
+}
+
+function triggerStation() {
+  gameRunning = false;
+  clearInterval(ticker);
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  setRoad(false);
+  document.getElementById('bulbRed').className='bulb-circle red-dim';
+  document.getElementById('bulbGreen').className='bulb-circle green-dim';
+  setRing(0,baseDur,'#aaa');
+  SFX.station();
+  speak('station', 500);
+  showBubble('station');
+  showSubtitle('station');
+  buildStars();
+  setTimeout(()=>document.getElementById('stationScreen').classList.add('show'), 600);
+}
+
+function resetGame() {
+  document.getElementById('stationScreen').classList.remove('show');
+  gameRunning=false; roundCount=0;
+  document.getElementById('bulbRed').className='bulb-circle red-dim';
+  document.getElementById('bulbGreen').className='bulb-circle green-dim';
+  const st=document.getElementById('bigStatus');
+  st.textContent='准备出发 🚦'; st.className='big-status';
+  setRing(0,baseDur,'#78f578');
+  buildDots(); setRoad(true);
+  // 隐藏字幕
+  clearTimeout(subtitleTimer);
+  document.getElementById('subtitleBar').classList.remove('show');
+}
+
+function changeSpeed(d) {
+  baseDur = Math.max(3,Math.min(15,baseDur+d));
+  document.getElementById('spdVal').textContent = baseDur+'秒';
+}
+
+// ── 进站星星 ─────────────────────────────────────
+function buildStars() {
+  const bg=document.getElementById('starsBg'); bg.innerHTML='';
+  const icons=['⭐','🌟','✨','💫'];
+  for(let i=0;i<32;i++){
+    const s=document.createElement('div');
+    s.className='star';
+    s.textContent=icons[Math.floor(Math.random()*icons.length)];
+    s.style.left=Math.random()*100+'vw';
+    s.style.top=Math.random()*100+'vh';
+    s.style.animationDelay=(Math.random()*2)+'s';
+    s.style.fontSize=(16+Math.random()*22)+'px';
+    bg.appendChild(s);
+  }
+}
+
+// 初始化
+buildDots();
+setRoad(true);
+</script>
+</body>
+</html>
